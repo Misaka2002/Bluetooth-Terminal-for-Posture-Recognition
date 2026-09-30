@@ -1,5 +1,7 @@
 # HC-06 蓝牙串口终端
 
+[English version](README.en.md)
+
 面向 Windows PC 的轻量串口文本终端，用于接收 STM32 经 HC-06 发送的姿态数据，也可发送文本命令。程序通过 Windows 配对后创建的虚拟串口（SPP）通信，不负责搜索或配对蓝牙设备。
 
 ## 文件
