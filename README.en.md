@@ -1,57 +1,101 @@
-# HC-06 Bluetooth Serial Terminal
+# Posture Dashboard
 
 [中文版](README.md)
 
-A lightweight serial text terminal for Windows PCs. It receives posture data sent by an STM32 through an HC-06 and can also send text commands. The app communicates through the virtual serial (SPP) port created when Windows pairs with the module; it does not scan for or pair with Bluetooth devices itself.
+Posture Dashboard is a Windows Bluetooth terminal that turns incoming posture classifications into duration statistics. It helps you see which postures you held during a session and how long each lasted.
 
-## Files
+The interface shows the current posture with a 3D illustration, alongside accumulated time, the longest continuous interval, occurrence counts, the upright share, and recent posture changes. Results are saved automatically and can be exported as CSV for analysis in Excel. The interface labels are in Chinese.
 
-- `BluetoothTerminal.exe`: ready-to-run Windows application.
-- `BluetoothTerminal.cs`: WinForms source code.
-- `Build.ps1`: builds the executable with the .NET Framework C# compiler included with Windows; no third-party dependencies are downloaded.
+![Posture Dashboard in demo mode](docs/images/overview.png)
 
-## Connect to the HC-06
+## Getting started
 
-1. Pair the HC-06 in Windows Bluetooth settings.
-2. Find the HC-06 **outgoing** COM port in Windows Bluetooth COM port settings or Device Manager. The COM number may change. Do not mistake the NUCLEO ST-LINK virtual COM port for the HC-06 port.
-3. Launch `BluetoothTerminal.exe`, click **Refresh**, select the HC-06 outgoing COM port, set the baud rate to `9600`, and click **Connect**.
-4. The serial format is fixed at 8N1 with no flow control. The baud rate must match both the HC-06 UART and the STM32 USART configuration.
+The application requires Windows and .NET Framework 4.x. If you already have a compiled copy, open `PostureStatisticsTerminal.exe`. For a source checkout, build it using the instructions below first.
 
-This project uses classic Bluetooth SPP through the HC-06. The PC needs a working classic Bluetooth adapter and driver. Successfully opening a COM port only confirms that Windows opened that port; it does not by itself prove that Bluetooth data is arriving.
+Pair the HC-06 in Windows Bluetooth settings, select its outgoing COM port in the app, and click **连接设备** (Connect). The serial settings are **9600 baud, 8 data bits, no parity, 1 stop bit, and no flow control**. Close any other serial tool using the port.
 
-## Receiving and line handling
+Valid posture records update the illustration and statistics automatically. **原始终端** (Raw terminal) hides or restores the receive log while reception, timing, and saving continue. **清屏** (Clear) clears only the displayed text; it does not reset statistics or saved logs.
 
-Each serial read may contain part of a line or several lines. The app buffers data and assembles complete lines using LF (`\n`). Therefore, the receive view and saved logs include only records that have reached a line terminator. A trailing fragment without a terminator remains buffered; it is not written to the log, and the app reports when such a fragment is omitted on disconnect.
+Without a device, click **演示模式** (Demo mode) or run `Demo.cmd`. Entering or leaving demo mode starts a separate session, keeping simulated data separate from device measurements. **新统计会话** (New statistics session) saves the current session and starts timing from zero.
 
-Incoming bytes are decoded as UTF-8 and displayed as text. The app does not parse fields, plot data, or provide binary/hex viewing. A text line currently used by the posture firmware looks like this:
+## Device messages
+
+Send posture names in newline-terminated records, for example:
 
 ```text
-SEQ=10,FB_CDEG=2,LR_CDEG=-14,ID=0,CONF_PCT=99
+POSTURE=upright
+POSTURE=forward_lean
 ```
 
-`FB_CDEG` and `LR_CDEG` are angles multiplied by 100, `ID` is a class identifier, and `CONF_PCT` is confidence multiplied by 100. The terminal only displays complete lines and saves logs; interpretation of these fields belongs to the higher-level application.
+Eight postures are supported. Left and right refer to the person's own perspective.
 
-## Interface
+| Device label | Meaning | Interface label |
+| --- | --- | --- |
+| `upright` | Upright sitting | 正坐 |
+| `forward_lean` | Forward lean | 前倾 |
+| `backward_lean` | Backward lean | 后仰 |
+| `left_lean` | Left lean | 左倾 |
+| `right_lean` | Right lean | 右倾 |
+| `forward_hunch` | Forward hunch | 前弯含胸 |
+| `left_hunch` | Left hunch | 左弯含胸 |
+| `right_hunch` | Right hunch | 右弯含胸 |
 
-- **Refresh**: re-enumerates Windows COM ports.
-- **Connect / Disconnect**: opens or releases the selected serial port.
-- **Send**: sends the text in the input box as UTF-8. CRLF can optionally be appended. The device must implement the corresponding receive or echo behavior to respond.
-- **Clear**: clears the display, cached complete lines, any unfinished line, and the receive counter.
-- **Save Log**: saves complete lines received since the last clear to a `.txt` file with a UTF-8 BOM. Sent text is not included.
+The parser also accepts `LABEL=<name>` fields and standalone posture names, without case sensitivity. Messages containing only a numeric `ID` are displayed in the log but do not contribute to statistics, because class mappings can differ between models.
 
-During long sessions, displayed text is trimmed after it exceeds 200,000 characters. The complete-line log buffer remains available until **Clear** is clicked or the app closes. If the connection is dropped or the wireless link is interrupted, check the device and reconnect. The Windows driver may not report a wireless disconnect immediately.
+## How timing works
 
-## Build from source
+Timing begins when the terminal creates the current session. The first valid posture starts its interval. A different posture ends that interval and starts the next; repeated reports of the same posture remain one continuous interval.
 
-Open PowerShell in this directory and run:
+Disconnecting ends the current posture immediately. If no new valid posture arrives for **2 seconds**, the state becomes unrecognized/no data. Time before connection, after disconnection, and after a timeout is tracked separately rather than assigned indefinitely to the last posture.
+
+Posture percentages use the total recognized duration as their denominator. The longest continuous duration is the longest uninterrupted interval of a posture. Occurrence counts include intervals with positive duration. Receiving the same posture again after a disconnection or timeout starts a new interval.
+
+The terminal uses the arrival time of complete data lines. It cannot recover activity before the session began, and switching-time precision depends on the device's reporting interval and wireless delay.
+
+## Saving and exporting
+
+Each session is stored in `sessions/` beside the application. Statistics are saved every 30 seconds and when disconnecting, changing modes, creating a new session, or closing normally. Reopening the app starts a new session; previous records stay on disk.
+
+| File | Contents |
+| --- | --- |
+| `summary.csv` | Accumulated duration, share, longest interval, and occurrence count for each posture |
+| `timeline.csv` | Start, end, and duration of each interval |
+| `session.json` | Session metadata, data source, and summary metrics |
+| `received.log` | Timestamped receive log |
+
+**导出 CSV** (Export CSV) saves the current statistics in a new subdirectory of your chosen destination, avoiding overwriting previous exports. CSV files use UTF-8 with a BOM for Chinese text in Excel, and durations are recorded in seconds. **保存日志** (Save log) exports the receive log separately.
+
+If the process is forcibly terminated, statistics since the most recent save may be lost. Normal exit saves a final snapshot, and the interface reports saving failures.
+
+## Building from source
+
+Run this in the project directory:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Build.ps1
+powershell -ExecutionPolicy Bypass -File .\Build.ps1
 ```
 
-The script uses the .NET Framework 4.x compiler included with Windows and writes `BluetoothTerminal.exe` to the current directory. The execution policy option applies only to this PowerShell process; it does not permanently change the system policy.
+The script uses the Windows .NET Framework C# compiler without downloading NuGet dependencies. It writes `PostureStatisticsTerminal.exe` to the project root. The 3D atlas is embedded in the executable, so no network access or separate image copy is needed at runtime.
 
-## Validation notes
+Run the timing-core tests with:
 
-- **2026-09-30**: The source was compiled with the included `Build.ps1` script.
-- **Hardware link**: The project owner reported successful reception of STM32 posture data through the HC-06 outgoing COM port at 9600 baud. The COM number depends on the current Windows assignment.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Build.ps1 -Test
+```
+
+Tests cover posture parsing, fragmented input, posture changes, disconnection and timeout handling, duration conservation, and CSV export. Generated test output goes into `.build/`, separate from real sessions.
+
+## Project layout
+
+```text
+src/        Application source and manifest
+tests/      Timing-core tests
+assets/     3D posture atlas used during compilation
+docs/       Interface screenshot and asset notes
+Build.ps1   Build and test entry point
+Demo.cmd    Demo-mode launcher
+```
+
+`src/PostureCore.cs` handles parsing and timing, `src/TerminalForm.cs` handles the interface and serial reception, and `src/ModernControls.cs` provides rounded controls. See the [asset notes](docs/assets.md) for the atlas source and cell mapping.
+
+Local sessions, test output, and generated executables are excluded by `.gitignore` and are not committed as source.

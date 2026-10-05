@@ -1,7 +1,17 @@
-bin/
-obj/
-.vs/
-*.user
-*.suo
+# 本地采集数据和构建输出
+/sessions/
+/.build/
+/test-results/
+/preview-sessions/
+/backups/
+*.exe
 *.pdb
-*.cache
+*.tmp
+*.log
+
+# 编辑器和系统文件
+.vs/
+.idea/
+Thumbs.db
+Desktop.ini
+.DS_Store
