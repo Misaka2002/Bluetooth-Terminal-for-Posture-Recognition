@@ -6,6 +6,8 @@
 
 界面用 3D 人物示意显示当前姿态，同时展示累计时长、最长连续时长、出现次数、正坐占比和最近的姿态切换。统计结果会自动保存，也可以导出为 CSV，方便在 Excel 中继续分析。
 
+需要在安卓手机上使用时，可以查看本项目的[安卓版本](https://github.com/Misaka2002/Bluetooth-Terminal-for-Posture-Recognition-Android-)。
+
 ![姿态观察台的演示界面](docs/images/overview.png)
 
 ## 开始使用
