@@ -6,6 +6,8 @@ Posture Dashboard is a Windows Bluetooth terminal that turns incoming posture cl
 
 The interface shows the current posture with a 3D illustration, alongside accumulated time, the longest continuous interval, occurrence counts, the upright share, and recent posture changes. Results are saved automatically and can be exported as CSV for analysis in Excel. The interface labels are in Chinese.
 
+For use on an Android phone, see the [Android version](https://github.com/Misaka2002/Bluetooth-Terminal-for-Posture-Recognition-Android-) of this project.
+
 ![Posture Dashboard in demo mode](docs/images/overview.png)
 
 ## Getting started
